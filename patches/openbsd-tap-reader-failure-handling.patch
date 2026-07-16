@@ -1,0 +1,152 @@
+diff --git a/osdep/BSDEthernetTap.cpp b/osdep/BSDEthernetTap.cpp
+--- a/osdep/BSDEthernetTap.cpp
++++ b/osdep/BSDEthernetTap.cpp
+@@ -40,6 +40,7 @@
+ #include <sys/select.h>
+ #include <sys/socket.h>
+ #include <sys/stat.h>
++#include <syslog.h>
+ #include <sys/types.h>
+ #include <sys/uio.h>
+ #include <sys/wait.h>
+@@ -54,6 +55,40 @@
+ 
+ namespace ZeroTier {
+ 
++#ifdef __OpenBSD__
++static const unsigned int ZT_OPENBSD_TAP_TRANSIENT_ERROR_LIMIT = 8;
++
++static bool ___isTransientTapReadError(int error)
++{
++	return ((error == EINTR) || (error == ETIMEDOUT) || (error == EAGAIN)
++#if EAGAIN != EWOULDBLOCK
++			|| (error == EWOULDBLOCK)
++#endif
++	);
++}
++
++static void ___logTapReaderError(const std::string& dev, const char* operation, int error, unsigned int failures, bool fatal)
++{
++	const char* description = error ? strerror(error) : "unexpected end of file";
++	const int priority = fatal ? LOG_CRIT : LOG_WARNING;
++	syslog(priority, "ZeroTier TAP reader %s failed on %s: %s (errno %d, consecutive failures %u)%s", operation, dev.c_str(), description, error, failures, fatal ? "; terminating daemon" : "; retrying");
++	fprintf(stderr, "ZeroTier TAP reader %s failed on %s: %s (errno %d, consecutive failures %u)%s" ZT_EOL_S, operation, dev.c_str(), description, error, failures, fatal ? "; terminating daemon" : "; retrying");
++}
++
++static void ___terminateForTapReaderFailure(const std::string& dev, const char* operation, int error, unsigned int failures)
++{
++	___logTapReaderError(dev, operation, error, failures, true);
++	if (::kill(::getpid(), SIGTERM) != 0)
++		::_exit(1);
++}
++
++static void ___backoffTapReader(unsigned int failures)
++{
++	const unsigned int shift = std::min(failures - 1, 6U);
++	Thread::sleep(10U << shift);
++}
++#endif
++
+ BSDEthernetTap::BSDEthernetTap(
+ 	const char* homePath,
+ 	unsigned int concurrency,
+@@ -203,6 +238,10 @@
+ BSDEthernetTap::~BSDEthernetTap()
+ {
+ 	::write(_shutdownSignalPipe[1], "\0", 1);	// causes thread to exit
++	Thread::join(_thread);
++	for (std::thread& t : _rxThreads) {
++		t.join();
++	}
+ 	::close(_fd);
+ 	::close(_shutdownSignalPipe[0]);
+ 	::close(_shutdownSignalPipe[1]);
+@@ -218,10 +257,6 @@
+ 		int exitcode = -1;
+ 		::waitpid(cpid, &exitcode, 0);
+ 	}
+-	Thread::join(_thread);
+-	for (std::thread& t : _rxThreads) {
+-		t.join();
+-	}
+ }
+ 
+ void BSDEthernetTap::setEnabled(bool en)
+@@ -483,19 +518,31 @@
+ 
+ 			uint8_t b[ZT_TAP_BUF_SIZE];
+ 			MAC to, from;
+-			fd_set readfds, nullfds;
+-			int n, nfds, r;
++			fd_set readfds;
++			int n, nfds, r, selected;
++#ifdef __OpenBSD__
++			unsigned int transientErrors = 0;
++#endif
+ 
+-			FD_ZERO(&readfds);
+-			FD_ZERO(&nullfds);
+ 			nfds = (int)std::max(_shutdownSignalPipe[0], _fd) + 1;
+ 
+ 			r = 0;
+ 
+ 			for (;;) {
++				FD_ZERO(&readfds);
+ 				FD_SET(_shutdownSignalPipe[0], &readfds);
+ 				FD_SET(_fd, &readfds);
+-				select(nfds, &readfds, &nullfds, &nullfds, (struct timeval*)0);
++				selected = select(nfds, &readfds, (fd_set*)0, (fd_set*)0, (struct timeval*)0);
++
++				if (selected < 0) {
++					const int error = errno;
++					if (error == EINTR)
++						continue;
++#ifdef __OpenBSD__
++					___terminateForTapReaderFailure(_dev, "select", error, 1);
++#endif
++					break;
++				}
+ 
+ 				if (FD_ISSET(_shutdownSignalPipe[0], &readfds))	  // writes to shutdown pipe terminate thread
+ 					break;
+@@ -503,10 +550,38 @@
+ 				if (FD_ISSET(_fd, &readfds)) {
+ 					n = (int)::read(_fd, b + r, sizeof(b) - r);
+ 					if (n < 0) {
+-						if ((errno != EINTR) && (errno != ETIMEDOUT))
+-							break;
++						const int error = errno;
++						if (error == EINTR)
++							continue;
++#ifdef __OpenBSD__
++						if (___isTransientTapReadError(error)) {
++							++transientErrors;
++							if (transientErrors >= ZT_OPENBSD_TAP_TRANSIENT_ERROR_LIMIT) {
++								___terminateForTapReaderFailure(_dev, "read", error, transientErrors);
++								break;
++							}
++							if (transientErrors == 1)
++								___logTapReaderError(_dev, "read", error, transientErrors, false);
++							___backoffTapReader(transientErrors);
++							continue;
++						}
++						___terminateForTapReaderFailure(_dev, "read", error, 1);
++#else
++						if (error == ETIMEDOUT)
++							continue;
++#endif
++						break;
++					}
++					else if (n == 0) {
++#ifdef __OpenBSD__
++						___terminateForTapReaderFailure(_dev, "read", 0, 1);
++#endif
++						break;
+ 					}
+ 					else {
++#ifdef __OpenBSD__
++						transientErrors = 0;
++#endif
+ 						// Some tap drivers like to send the ethernet frame and the
+ 						// payload in two chunks, so handle that by accumulating
+ 						// data until we have at least a frame.

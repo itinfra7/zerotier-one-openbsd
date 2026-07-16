@@ -5,16 +5,16 @@ This repository contains multiple licensing scopes:
 - ZeroTierOne upstream source code is not vendored in this repository. It is
   downloaded from https://github.com/zerotier/ZeroTierOne and remains under the
   upstream ZeroTierOne license.
-- patches/openbsd-managed-ip-multicast-subscriptions.patch modifies
-  ZeroTierOne source files that are licensed under the Mozilla Public License
-  2.0. The patch is therefore distributed under MPL-2.0.
-- install.sh, README.md, .gitignore, and repository-local documentation are
-  distributed under the MIT License below.
+- The files in patches/ modify ZeroTierOne source files that are licensed under
+  the Mozilla Public License 2.0. Those patch files are therefore distributed
+  under MPL-2.0.
+- install.sh, README.md, repository metadata, and repository-local
+  documentation are distributed under the MIT License below.
 
 Credit notices must be preserved:
 
 - ZeroTier, Inc. and the ZeroTierOne project: https://github.com/zerotier/ZeroTierOne
-- OpenBSD installer and multicast subscription patch: itinfra7 from GitHub
+- OpenBSD installer and OpenBSD source patches: itinfra7 from GitHub
 
 MIT License
 
@@ -38,12 +38,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-MPL-2.0 Notice For Patch File
+MPL-2.0 Notice For Patch Files
 
-The file patches/openbsd-managed-ip-multicast-subscriptions.patch is a patch
-against ZeroTierOne source files originally distributed under MPL-2.0.
+The files patches/openbsd-managed-ip-multicast-subscriptions.patch and
+patches/openbsd-tap-reader-failure-handling.patch are patches against
+ZeroTierOne source files originally distributed under MPL-2.0.
 
-The patch file is distributed under the Mozilla Public License, v. 2.0. If a
-copy of the MPL was not distributed with this file, you can obtain one at:
+The patch files are distributed under the Mozilla Public License, v. 2.0. If a
+copy of the MPL was not distributed with these files, you can obtain one at:
 
 https://mozilla.org/MPL/2.0/

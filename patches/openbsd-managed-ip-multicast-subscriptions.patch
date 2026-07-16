@@ -1,5 +1,4 @@
 diff --git a/osdep/BSDEthernetTap.cpp b/osdep/BSDEthernetTap.cpp
-index 8c6f94b..3d2f2d7 100644
 --- a/osdep/BSDEthernetTap.cpp
 +++ b/osdep/BSDEthernetTap.cpp
 @@ -282,7 +282,19 @@ bool BSDEthernetTap::addIp(const InetAddress& ip)
@@ -23,7 +22,7 @@ index 8c6f94b..3d2f2d7 100644
  	}
  	return false;
  }
-@@ -305,8 +317,16 @@ bool BSDEthernetTap::removeIp(const InetAddress& ip)
+@@ -294,8 +306,16 @@ bool BSDEthernetTap::removeIp(const InetAddress& ip)
  		return false;
  	std::vector<InetAddress> allIps(ips());
  	if (std::find(allIps.begin(), allIps.end(), ip) != allIps.end()) {
@@ -41,7 +40,7 @@ index 8c6f94b..3d2f2d7 100644
  	}
  	return false;
  }
-@@ -338,8 +358,13 @@ std::vector<InetAddress> BSDEthernetTap::ips() const
+@@ -338,6 +358,11 @@ std::vector<InetAddress> BSDEthernetTap::ips() const
  	if (ifa)
  		freeifaddrs(ifa);
  
@@ -51,22 +50,9 @@ index 8c6f94b..3d2f2d7 100644
 +	}
 +
  	std::sort(r.begin(), r.end());
--	std::unique(r.begin(), r.end());
-+	r.erase(std::unique(r.begin(), r.end()), r.end());
+ 	r.erase(std::unique(r.begin(), r.end()), r.end());
  
- 	_ifaddrs = r;
- 
-@@ -394,7 +419,7 @@ void BSDEthernetTap::scanMulticastGroups(std::vector<MulticastGroup>& added, std
- 		newGroups.push_back(MulticastGroup::deriveMulticastGroupForAddressResolution(*ip));
- 
- 	std::sort(newGroups.begin(), newGroups.end());
--	std::unique(newGroups.begin(), newGroups.end());
-+	newGroups.erase(std::unique(newGroups.begin(), newGroups.end()), newGroups.end());
- 
- 	for (std::vector<MulticastGroup>::iterator m(newGroups.begin()); m != newGroups.end(); ++m) {
- 		if (! std::binary_search(_multicastGroups.begin(), _multicastGroups.end(), *m))
 diff --git a/osdep/BSDEthernetTap.hpp b/osdep/BSDEthernetTap.hpp
-index 91c9a61..2022b16 100644
 --- a/osdep/BSDEthernetTap.hpp
 +++ b/osdep/BSDEthernetTap.hpp
 @@ -72,6 +72,7 @@ class BSDEthernetTap : public EthernetTap {
